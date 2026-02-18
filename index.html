@@ -924,8 +924,7 @@
                 <div class="nav-item admin-only" onclick="showSection('reports', this)"><i
                         class="fas fa-chart-line"></i><span>Reports</span></div>
             </div>
-            <button onclick="seedData()" class="btn-logout" style="margin-bottom: 10px; background-color: #4f46e5;"><i
-                    class="fas fa-database"></i> Seed Data</button>
+
             <button onclick="logout()" class="btn-logout"><i class="fas fa-sign-out-alt"></i> Logout</button>
         </div>
 
@@ -1057,7 +1056,7 @@
                         <div class="panel">
                             <div class="panel-header"><i class="fas fa-list text-success"></i> Suppliers</div>
                             <div class="panel-body" style="padding: 20px;">
-                                <div id="supplier-list"></div>
+                                <div id="supplier-list" style="max-height: 400px; overflow-y: auto;"></div>
                             </div>
                         </div>
                     </div>
@@ -1412,8 +1411,7 @@
 
             // SUPPLIERS
             db.collection("suppliers").onSnapshot((snapshot) => {
-                const supplierData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                suppliers = supplierData.map(s => s.name);
+                suppliers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 renderSuppliers();
                 if (document.getElementById('suppliers-section').classList.contains('active')) renderSuppliersList();
             });
@@ -1796,7 +1794,7 @@
             const sel = document.getElementById('prod-supplier');
             sel.innerHTML = '<option value="">Select</option>';
             suppliers.forEach(s => {
-                sel.innerHTML += `<option value="${s}">${s}</option>`;
+                sel.innerHTML += `<option value="${s.name}">${s.name}</option>`;
             });
         }
 
@@ -1804,12 +1802,10 @@
             const div = document.getElementById('supplier-list');
             div.innerHTML = '';
             suppliers.forEach(s => {
-                // Determine ID if stored as object, else query
-                // Since we currently just have names in 'suppliers' array from snapshot, 
-                // we'll need to re-fetch or store map to delete correctly.
-                // For simplicity, let's assume valid delete requires more logic or ID map.
-                // WE will fix this by searching for the doc with this name or changing structure.
-                div.innerHTML += `<div class="panel" style="padding: 16px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;"><strong>${s}</strong></div>`;
+                div.innerHTML += `<div class="panel" style="padding: 16px; margin-bottom: 10px; display: flex; align-items: center;">
+                    <strong style="flex-grow: 1;">${s.name}</strong>
+                    <button class="btn-sm btn-danger" onclick="deleteSupplier('${s.id}')" style="margin-left: auto;"><i class="fas fa-trash"></i></button>
+                    </div>`;
             });
         }
 
@@ -1817,6 +1813,10 @@
             e.preventDefault();
             const name = document.getElementById('supplier-name').value;
             if (!name) return;
+
+            if (suppliers.some(s => s.name.toLowerCase() === name.toLowerCase())) {
+                return alert("Supplier already exists!");
+            }
 
             db.collection("suppliers").add({ name: name })
                 .then(() => {
@@ -1826,10 +1826,12 @@
                 .catch(err => alert("Error: " + err.message));
         }
 
-        // Placeholder for deleteSupplier until we manage IDs better for suppliers
-        function deleteSupplier(name) {
-            // Implementation depends on having ID. For now notify user.
-            alert("Supplier deletion requires ID management update.");
+        function deleteSupplier(id) {
+            if (confirm("Delete this supplier?")) {
+                db.collection("suppliers").doc(id).delete()
+                    .then(() => alert("Supplier deleted"))
+                    .catch(err => alert("Error: " + err.message));
+            }
         }
 
         // Loans
@@ -1984,38 +1986,6 @@
                 });
             }
             new bootstrap.Modal(document.getElementById('notifModal')).show();
-        }
-        // Seed Data
-        function seedData() {
-            if (!confirm("This will add sample products and suppliers to your database. Continue?")) return;
-
-            const batch = db.batch();
-
-            const sampleProducts = [
-                { name: 'Panadol 500mg', price: 30, cost: 22, stock: 100, supplier: 'GSK' },
-                { name: 'Brufen 400mg', price: 25, cost: 18, stock: 4, supplier: 'Abbott' },
-                { name: 'Disprin', price: 15, cost: 10, stock: 50, supplier: 'Reckitt' },
-                { name: 'Flagyl 400mg', price: 35, cost: 25, stock: 3, supplier: 'Sanofi' }
-            ];
-
-            const sampleSuppliers = ['GSK', 'Abbott', 'Reckitt', 'Sanofi'];
-
-            sampleProducts.forEach(p => {
-                const docRef = db.collection("products").doc();
-                batch.set(docRef, p);
-            });
-
-            sampleSuppliers.forEach(s => {
-                const docRef = db.collection("suppliers").doc();
-                batch.set(docRef, { name: s });
-            });
-
-            batch.commit()
-                .then(() => alert("Sample data added successfully! check your app."))
-                .catch(err => {
-                    console.error("Error seeding data:", err);
-                    alert("Error adding data: " + err.message + "\n\nCheck your browser console (F12) and Firestore Security Rules.");
-                });
         }
     </script>
 </body>
