@@ -1710,11 +1710,10 @@
                     <td><div style="font-weight: 600;">${p.name}</div></td>
                     <td>Rs. ${p.price}</td>
                     <td class="admin-only">Rs. ${p.cost}</td>
-                    <td>${p.stock}</td>
+                    <td><input type="number" class="form-control form-control-sm" style="width: 80px;" value="${p.stock}" onchange="updateStock('${p.id}', this.value)"></td>
                     <td>${p.supplier}</td>
                     <td>
                         <button class="btn-sm btn-danger" onclick="deleteProduct('${p.id}')"><i class="fas fa-trash"></i></button>
-                        <button class="btn-sm btn-primary" onclick="editProduct('${p.id}')"><i class="fas fa-edit"></i></button>
                     </td>
                 </tr>`;
             });
@@ -1723,18 +1722,22 @@
             }
         }
 
-        function editProduct(id) {
-            const p = products.find(x => x.id === id);
-            if (!p) return;
-            // Simple prompt for now, can be improved to modal
-            const newStock = prompt("Enter new stock for " + p.name, p.stock);
-            if (newStock !== null) {
-                const stock = parseInt(newStock);
-                if (!isNaN(stock) && stock >= 0) {
-                    db.collection("products").doc(id).update({ stock: stock })
-                        .then(() => alert("Stock updated"))
-                        .catch(err => alert("Error: " + err.message));
-                }
+        function updateStock(id, val) {
+            const stock = parseInt(val);
+            if (!isNaN(stock) && stock >= 0) {
+                db.collection("products").doc(id).update({ stock: stock })
+                    .then(() => {
+                        // Optional: Show a small toast or success indicator
+                        console.log("Stock updated");
+                    })
+                    .catch(err => {
+                        alert("Error: " + err.message);
+                        // Revert change in UI if failed (requires re-render or keeping track of old value)
+                        renderInventory();
+                    });
+            } else {
+                alert("Invalid stock value");
+                renderInventory();
             }
         }
 
