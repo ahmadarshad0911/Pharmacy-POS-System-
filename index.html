@@ -1622,8 +1622,36 @@
             const tbody = document.getElementById('inventory-table');
             tbody.innerHTML = '';
             products.forEach((p, i) => {
-                tbody.innerHTML += `<tr><td><div style="font-weight: 600;">${p.name}</div></td><td>Rs. ${p.price}</td><td class="admin-only">Rs. ${p.cost}</td><td><span class="badge ${p.stock < 5 ? 'badge-danger' : 'badge-success'}">${p.stock}</span></td><td>${p.supplier}</td><td><button class="btn-sm btn-danger" onclick="deleteProduct(${i})"><i class="fas fa-trash"></i></button></td></tr>`;
+                // Changed Stock column to use input field
+                tbody.innerHTML += `<tr>
+                    <td><div style="font-weight: 600;">${p.name}</div></td>
+                    <td>Rs. ${p.price}</td>
+                    <td class="admin-only">Rs. ${p.cost}</td>
+                    <td>
+                        <input type="number" 
+                               value="${p.stock}" 
+                               min="0" 
+                               style="width: 80px; padding: 4px; border: 1px solid #cbd5e1; border-radius: 6px; ${p.stock < 5 ? 'background: #fee2e2; color: #991b1b; border-color: #fca5a5;' : ''}"
+                               onchange="updateStock(${i}, this.value)">
+                    </td>
+                    <td>${p.supplier}</td>
+                    <td><button class="btn-sm btn-danger" onclick="deleteProduct(${i})"><i class="fas fa-trash"></i></button></td>
+                </tr>`;
             });
+        }
+
+        function updateStock(index, newVal) {
+            const val = parseInt(newVal);
+            if (isNaN(val) || val < 0) {
+                alert('Invalid quantity!');
+                renderInventory(); // Reset to valid state
+                return;
+            }
+            products[index].stock = val;
+            saveData();
+            checkLowStock();
+            renderInventory(); // Re-render to update styling (e.g. low stock color)
+            renderProducts(); // Update POS grid helpers if needed
         }
 
         function renderSuppliers() {
