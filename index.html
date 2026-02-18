@@ -643,12 +643,14 @@
             margin-bottom: 8px;
         }
 
-        .form-group input {
+        .form-group input,
+        .form-group select {
             width: 100%;
             padding: 14px;
             border: 2px solid #e2e8f0;
             border-radius: 12px;
             font-size: 15px;
+            background-color: white;
         }
 
         .change-display {
@@ -994,7 +996,7 @@
                     <div style="display: grid; grid-template-columns: 350px 1fr; gap: 20px; height: 100%;">
                         <div class="panel">
                             <div class="panel-header"><i class="fas fa-plus-circle text-primary"></i> Add Product</div>
-                            <div class="panel-body">
+                            <div class="panel-body" style="overflow-y: auto;">
                                 <form id="add-product-form" onsubmit="addProduct(event)">
                                     <div class="form-group"><label>Medicine Name</label><input type="text"
                                             id="prod-name" required placeholder="e.g., Panadol"></div>
