@@ -969,7 +969,7 @@
                                             <tr>
                                                 <th>Item</th>
                                                 <th>Qty</th>
-                                                <th>Disc%</th>
+
                                                 <th>Total</th>
                                                 <th></th>
                                             </tr>
@@ -980,8 +980,16 @@
                                 <div class="cart-summary">
                                     <div class="summary-row"><span>Subtotal</span><span>Rs. <span
                                                 id="subtotal">0</span></span></div>
-                                    <div class="summary-row discount"><span>Discount</span><span>- Rs. <span
-                                                id="total-discount">0</span></span></div>
+                                    <div class="summary-row discount"><span>Discount (%)</span>
+                                        <div style="display: flex; align-items: center; gap: 4px;">
+                                            <input type="number" id="global-discount-input" value="0" min="0" max="100"
+                                                onchange="updateGlobalDiscount(this.value)"
+                                                style="width: 60px; text-align: right; border: 2px solid #ef476f; border-radius: 8px; padding: 4px; color: #ef476f; font-weight: 700;">
+                                            <span>%</span>
+                                        </div>
+                                    </div>
+                                    <div class="summary-row discount"><span>Discount Amt</span><span>- Rs. <span
+                                                id="discount-amount-display">0</span></span></div>
                                     <div class="summary-row total"><span>Grand Total</span><span>Rs. <span
                                                 id="grand-total">0</span></span></div>
                                     <button onclick="openCheckout()" class="btn-checkout"><i
@@ -1369,6 +1377,7 @@
         let selectedPayment = null;
         let currentLoanFilter = 'all';
         let lastSale = null;
+        let globalDiscount = 0;
 
         // Auth
         function login() {
@@ -1469,7 +1478,7 @@
                 if (existing.qty < p.stock) existing.qty++;
                 else return alert('Max stock!');
             } else {
-                cart.push({ ...p, qty: 1, discount: 0 });
+                cart.push({ ...p, qty: 1 });
             }
             renderCart();
         }
@@ -1477,19 +1486,34 @@
         function renderCart() {
             const tbody = document.getElementById('cart-body');
             tbody.innerHTML = '';
-            let subtotal = 0, totalDisc = 0;
+            let subtotal = 0;
             cart.forEach((item, i) => {
                 const itemSub = item.price * item.qty;
-                const discAmt = Math.round(itemSub * (item.discount / 100));
-                const itemTotal = itemSub - discAmt;
                 subtotal += itemSub;
-                totalDisc += discAmt;
-                tbody.innerHTML += `<tr><td><div class="item-name">${item.name}</div><div class="item-meta">Rs. ${item.price}</div></td><td><input type="number" class="input-qty" value="${item.qty}" min="1" max="${item.stock}" onchange="updateCart(${i}, 'qty', this.value)"></td><td><input type="number" class="input-disc" value="${item.discount}" min="0" max="100" onchange="updateCart(${i}, 'disc', this.value)"><span class="disc-symbol">%</span></td><td style="font-weight: 700;">Rs. ${itemTotal}</td><td><button class="btn-delete-item" onclick="removeFromCart(${i})"><i class="fas fa-trash"></i></button></td></tr>`;
+                tbody.innerHTML += `<tr><td><div class="item-name">${item.name}</div><div class="item-meta">Rs. ${item.price}</div></td><td><input type="number" class="input-qty" value="${item.qty}" min="1" max="${item.stock}" onchange="updateCart(${i}, 'qty', this.value)"></td><td style="font-weight: 700;">Rs. ${itemSub}</td><td><button class="btn-delete-item" onclick="removeFromCart(${i})"><i class="fas fa-trash"></i></button></td></tr>`;
             });
             document.getElementById('cart-count').textContent = cart.length + ' items';
             document.getElementById('subtotal').textContent = subtotal;
-            document.getElementById('total-discount').textContent = totalDisc;
-            document.getElementById('grand-total').textContent = subtotal - totalDisc;
+
+            // Calculate Percentage Discount
+            let discountAmt = 0;
+            if (globalDiscount > 0) {
+                discountAmt = Math.round(subtotal * (globalDiscount / 100));
+            }
+
+            const inputDisc = document.getElementById('global-discount-input');
+            if (inputDisc) inputDisc.value = globalDiscount;
+
+            document.getElementById('discount-amount-display').textContent = discountAmt;
+            document.getElementById('grand-total').textContent = subtotal - discountAmt;
+        }
+
+        function updateGlobalDiscount(val) {
+            val = parseInt(val) || 0;
+            if (val < 0) val = 0;
+            if (val > 100) val = 100;
+            globalDiscount = val;
+            renderCart();
         }
 
         function updateCart(i, field, val) {
@@ -1500,10 +1524,6 @@
                 if (val > prod.stock) { alert('Not enough stock!'); val = prod.stock; }
                 if (val < 1) val = 1;
                 item.qty = val;
-            } else if (field === 'disc') {
-                if (val > 100) val = 100;
-                if (val < 0) val = 0;
-                item.discount = val;
             }
             renderCart();
         }
@@ -1566,19 +1586,35 @@
                     batch.update(itemRef, { stock: newStock });
 
                     const itemSub = item.price * item.qty;
-                    const discAmt = Math.round(itemSub * (item.discount / 100));
-                    profit += (itemSub - discAmt) - (item.cost * item.qty);
+                    profit += (itemSub) - (item.cost * item.qty);
                 }
+
+                let subtotal = 0;
+                cart.forEach(item => subtotal += item.price * item.qty);
+
+                // Calculate discount amount for storage
+                const discountAmount = Math.round(subtotal * (globalDiscount / 100));
+                const finalTotal = subtotal - discountAmount;
+
+                if (received < finalTotal) return alert('Insufficient amount!');
+
+                // Subtract global discount from total profit
+                // Profit logic: (Selling - Cost) - Discount
+                // We approximated per item profit before, now we subtract total discount from the sum of item profits
+                profit = profit - discountAmount;
 
                 const saleData = {
                     date: new Date().toISOString(),
                     items: cart,
-                    total: total,
+                    subtotal: subtotal,
+                    total: finalTotal,
+                    discountPercent: globalDiscount,
+                    discountAmount: discountAmount,
                     profit: profit,
                     method: selectedPayment === 'Cash' ? 'Cash' : 'JazzCash/EasyPaisa',
                     sender: sender,
                     received: received,
-                    change: received - total
+                    change: received - finalTotal
                 };
 
                 const newSaleRef = db.collection("sales").doc();
@@ -1598,6 +1634,10 @@
                 }, 300);
 
                 cart = [];
+                globalDiscount = 0;
+                const inputDisc = document.getElementById('global-discount-input');
+                if (inputDisc) inputDisc.value = 0;
+                document.getElementById('discount-amount-display').textContent = 0;
                 renderCart();
 
             } catch (error) {
@@ -1610,14 +1650,16 @@
         function showReceipt(sale) {
             const date = new Date(sale.date);
             let itemsHtml = '';
-            let totalDiscount = 0;
+
+            // Backwards compatibility for old sales without discountPercent
+            const hasPercent = sale.discountPercent !== undefined;
+            const discountAmt = hasPercent ? sale.discountAmount : (sale.discount || 0);
+            const discountP = hasPercent ? sale.discountPercent : 0;
+            const subtotal = sale.subtotal || (sale.total + discountAmt);
 
             sale.items.forEach(item => {
                 const itemSub = item.price * item.qty;
-                const discAmt = Math.round(itemSub * (item.discount / 100));
-                totalDiscount += discAmt;
-                const finalPrice = itemSub - discAmt;
-                itemsHtml += `<div class="receipt-item"><div class="receipt-item-name">${item.name}</div><div class="receipt-item-detail"><span>${item.qty} x Rs. ${item.price}${item.discount > 0 ? ' (Disc ' + item.discount + '%)' : ''}</span><span>Rs. ${finalPrice}</span></div></div>`;
+                itemsHtml += `<div class="receipt-item"><div class="receipt-item-name">${item.name}</div><div class="receipt-item-detail"><span>${item.qty} x Rs. ${item.price}</span><span>Rs. ${itemSub}</span></div></div>`;
             });
 
             const receiptHTML = `
@@ -1629,8 +1671,8 @@
                 </div>
                 <div class="receipt-items">${itemsHtml}</div>
                 <div class="receipt-totals">
-                    <div class="total-row"><span>Subtotal</span><span>Rs. ${sale.total + totalDiscount}</span></div>
-                    <div class="total-row"><span>Discount</span><span>Rs. ${totalDiscount}</span></div>
+                    <div class="total-row"><span>Subtotal</span><span>Rs. ${subtotal}</span></div>
+                    <div class="total-row"><span>Discount (${discountP}%)</span><span>Rs. ${discountAmt}</span></div>
                     <div class="total-row grand"><span>TOTAL</span><span>Rs. ${sale.total}</span></div>
                     <div class="total-row" style="margin-top: 8px; color: #64748b;"><span>Received</span><span>Rs. ${sale.received}</span></div>
                     <div class="total-row" style="color: #64748b;"><span>Change</span><span>Rs. ${sale.change}</span></div>
@@ -1656,19 +1698,17 @@
                     </div>
                     ${sale.items.map(item => {
                 const itemSub = item.price * item.qty;
-                const disc = Math.round(itemSub * (item.discount / 100));
-                const final = itemSub - disc;
                 return `<div style="margin-bottom: 8px;">
                             <div style="font-weight: bold;">${item.name}</div>
                             <div style="display: flex; justify-content: space-between; padding-left: 10px;">
-                                <span>${item.qty} x ${item.price}${item.discount > 0 ? ' (Disc ' + item.discount + '%)' : ''}</span>
-                                <span>Rs. ${final}</span>
+                                <span>${item.qty} x ${item.price}</span>
+                                <span>Rs. ${itemSub}</span>
                             </div>
                         </div>`;
             }).join('')}
                     <div style="border-top: 2px dashed #000; padding-top: 10px; margin-top: 10px;">
-                        <div style="display: flex; justify-content: space-between;"><span>Subtotal:</span><span>Rs. ${sale.total + totalDiscount}</span></div>
-                        <div style="display: flex; justify-content: space-between;"><span>Discount:</span><span>Rs. ${totalDiscount}</span></div>
+                        <div style="display: flex; justify-content: space-between;"><span>Subtotal:</span><span>Rs. ${subtotal}</span></div>
+                        <div style="display: flex; justify-content: space-between;"><span>Discount (${discountP}%):</span><span>Rs. ${discountAmt}</span></div>
                         <div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: bold; border-top: 2px solid #000; padding-top: 5px; margin-top: 5px;"><span>TOTAL:</span><span>Rs. ${sale.total}</span></div>
                         <div style="display: flex; justify-content: space-between; margin-top: 5px;"><span>Received:</span><span>Rs. ${sale.received}</span></div>
                         <div style="display: flex; justify-content: space-between;"><span>Change:</span><span>Rs. ${sale.change}</span></div>
@@ -1881,7 +1921,10 @@
 
         function markLoanPaid(id) {
             if (confirm('Mark as paid?')) {
-                db.collection("loans").doc(id).update({ status: 'paid' });
+                db.collection("loans").doc(id).update({
+                    status: 'paid',
+                    paidDate: new Date().toISOString()
+                });
             }
         }
 
@@ -1940,18 +1983,12 @@
             const tbody = document.getElementById('report-table');
             tbody.innerHTML = '';
 
-            filteredSales.forEach(s => {
-                totalSales += s.total;
-                totalProfit += s.profit;
-                count++;
-                tbody.innerHTML += `<tr><td>${new Date(s.date).toLocaleDateString()}</td><td>${s.method}</td><td>${s.sender}</td><td>${s.items.length}</td><td>Rs. ${s.total}</td><td class="admin-only">Rs. ${s.profit}</td></tr>`;
-            });
-
             // Calculate total expenses for net profit
             let totalExp = 0;
-            // Naive expense filtering matching sales filter
+            let totalPaidLoans = 0;
+
+            // Naive filtering
             expenses.forEach(e => {
-                // Date compare depends on format. Input type date uses YYYY-MM-DD
                 if (filter === 'today') {
                     const todayStr = now.toISOString().split('T')[0];
                     if (e.date === todayStr) totalExp += e.amount;
@@ -1963,8 +2000,75 @@
                 }
             });
 
+            // Calculate paid loans for the period and prepare for history list
+            let historyItems = [];
+
+            // Add sales to history
+            filteredSales.forEach(s => {
+                totalSales += s.total;
+                totalProfit += s.profit;
+                count++;
+                historyItems.push({
+                    type: 'sale',
+                    date: s.date,
+                    method: s.method,
+                    sender: s.sender,
+                    items: s.items.length,
+                    total: s.total,
+                    profit: s.profit
+                });
+            });
+
+            // Add paid loans to history
+            loans.forEach(l => {
+                if (l.status === 'paid') {
+                    const dateToCheck = l.paidDate ? l.paidDate : l.date; // Fallback
+                    let include = false;
+
+                    if (filter === 'today') {
+                        const todayStr = now.toISOString().split('T')[0];
+                        if (dateToCheck.startsWith(todayStr)) include = true;
+                    } else if (filter === 'month') {
+                        const monthStr = now.toISOString().slice(0, 7);
+                        if (dateToCheck.startsWith(monthStr)) include = true;
+                    } else {
+                        include = true;
+                    }
+
+                    if (include) {
+                        totalPaidLoans += l.amount;
+                        historyItems.push({
+                            type: 'loan',
+                            date: dateToCheck,
+                            method: '<span class="badge badge-success">Loan Paid</span>',
+                            sender: l.name,
+                            items: '-',
+                            total: l.amount,
+                            profit: l.amount // Paid loan counts towards cash flow/profit in this simple model
+                        });
+                    }
+                }
+            });
+
+            // Sort history by date desc
+            historyItems.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            // Render history
+            historyItems.forEach(item => {
+                const dateDisplay = new Date(item.date).toLocaleDateString();
+                const totalDisplay = item.type === 'loan' ? `<span class="text-success">+ Rs. ${item.total}</span>` : `Rs. ${item.total}`;
+                // For loans, profit is technically the recovered amount, but in the table "Profit" column for sales implies margin. 
+                // For consistency with the summary, we can show the amount or maybe just '-' if it's confusing.
+                // However, since we add it to "Net Profit", showing it here makes sense to explain the total.
+                const profitDisplay = item.type === 'loan' ? `Rs. ${item.total}` : `Rs. ${item.profit}`;
+
+                tbody.innerHTML += `<tr><td>${dateDisplay}</td><td>${item.method}</td><td>${item.sender}</td><td>${item.items}</td><td>${totalDisplay}</td><td class="admin-only">${profitDisplay}</td></tr>`;
+            });
+
             document.getElementById('report-sales').textContent = 'Rs. ' + totalSales;
-            document.getElementById('report-profit').textContent = 'Rs. ' + (totalProfit - totalExp);
+            // Net Profit = Sales Profit + Recovered Loans - Expenses
+            document.getElementById('report-profit').innerHTML = 'Rs. ' + (totalProfit + totalPaidLoans - totalExp) +
+                `<br><small style="font-size: 10px; font-weight: normal;">(Sales: ${totalProfit} + Loans: ${totalPaidLoans} - Exp: ${totalExp})</small>`;
             document.getElementById('report-expenses').textContent = 'Rs. ' + totalExp;
             document.getElementById('report-count').textContent = count;
 
