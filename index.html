@@ -980,16 +980,14 @@
                                 <div class="cart-summary">
                                     <div class="summary-row"><span>Subtotal</span><span>Rs. <span
                                                 id="subtotal">0</span></span></div>
-                                    <div class="summary-row discount"><span>Discount (%)</span>
+                                    <div class="summary-row discount"><span>Discount (Rs.)</span>
                                         <div style="display: flex; align-items: center; gap: 4px;">
-                                            <input type="number" id="global-discount-input" value="0" min="0" max="100"
+                                            <span>Rs.</span>
+                                            <input type="number" id="global-discount-input" value="0" min="0"
                                                 onchange="updateGlobalDiscount(this.value)"
-                                                style="width: 60px; text-align: right; border: 2px solid #ef476f; border-radius: 8px; padding: 4px; color: #ef476f; font-weight: 700;">
-                                            <span>%</span>
+                                                style="width: 70px; text-align: right; border: 2px solid #ef476f; border-radius: 8px; padding: 4px; color: #ef476f; font-weight: 700;">
                                         </div>
                                     </div>
-                                    <div class="summary-row discount"><span>Discount Amt</span><span>- Rs. <span
-                                                id="discount-amount-display">0</span></span></div>
                                     <div class="summary-row total"><span>Grand Total</span><span>Rs. <span
                                                 id="grand-total">0</span></span></div>
                                     <button onclick="openCheckout()" class="btn-checkout"><i
@@ -1495,23 +1493,18 @@
             document.getElementById('cart-count').textContent = cart.length + ' items';
             document.getElementById('subtotal').textContent = subtotal;
 
-            // Calculate Percentage Discount
-            let discountAmt = 0;
-            if (globalDiscount > 0) {
-                discountAmt = Math.round(subtotal * (globalDiscount / 100));
-            }
+            // Calculate Flat Discount Amount
+            let discountAmt = globalDiscount > 0 ? Math.min(globalDiscount, subtotal) : 0;
 
             const inputDisc = document.getElementById('global-discount-input');
             if (inputDisc) inputDisc.value = globalDiscount;
 
-            document.getElementById('discount-amount-display').textContent = discountAmt;
             document.getElementById('grand-total').textContent = subtotal - discountAmt;
         }
 
         function updateGlobalDiscount(val) {
             val = parseInt(val) || 0;
             if (val < 0) val = 0;
-            if (val > 100) val = 100;
             globalDiscount = val;
             renderCart();
         }
@@ -1592,15 +1585,13 @@
                 let subtotal = 0;
                 cart.forEach(item => subtotal += item.price * item.qty);
 
-                // Calculate discount amount for storage
-                const discountAmount = Math.round(subtotal * (globalDiscount / 100));
+                // Calculate flat discount amount for storage
+                const discountAmount = Math.min(globalDiscount, subtotal);
                 const finalTotal = subtotal - discountAmount;
 
                 if (received < finalTotal) return alert('Insufficient amount!');
 
                 // Subtract global discount from total profit
-                // Profit logic: (Selling - Cost) - Discount
-                // We approximated per item profit before, now we subtract total discount from the sum of item profits
                 profit = profit - discountAmount;
 
                 const saleData = {
@@ -1608,7 +1599,6 @@
                     items: cart,
                     subtotal: subtotal,
                     total: finalTotal,
-                    discountPercent: globalDiscount,
                     discountAmount: discountAmount,
                     profit: profit,
                     method: selectedPayment === 'Cash' ? 'Cash' : 'JazzCash/EasyPaisa',
@@ -1637,7 +1627,6 @@
                 globalDiscount = 0;
                 const inputDisc = document.getElementById('global-discount-input');
                 if (inputDisc) inputDisc.value = 0;
-                document.getElementById('discount-amount-display').textContent = 0;
                 renderCart();
 
             } catch (error) {
@@ -1651,10 +1640,8 @@
             const date = new Date(sale.date);
             let itemsHtml = '';
 
-            // Backwards compatibility for old sales without discountPercent
-            const hasPercent = sale.discountPercent !== undefined;
-            const discountAmt = hasPercent ? sale.discountAmount : (sale.discount || 0);
-            const discountP = hasPercent ? sale.discountPercent : 0;
+            // Backwards compatibility for old sales
+            const discountAmt = sale.discountAmount || sale.discount || 0;
             const subtotal = sale.subtotal || (sale.total + discountAmt);
 
             sale.items.forEach(item => {
@@ -1672,7 +1659,7 @@
                 <div class="receipt-items">${itemsHtml}</div>
                 <div class="receipt-totals">
                     <div class="total-row"><span>Subtotal</span><span>Rs. ${subtotal}</span></div>
-                    <div class="total-row"><span>Discount (${discountP}%)</span><span>Rs. ${discountAmt}</span></div>
+                    <div class="total-row"><span>Discount</span><span>Rs. ${discountAmt}</span></div>
                     <div class="total-row grand"><span>TOTAL</span><span>Rs. ${sale.total}</span></div>
                     <div class="total-row" style="margin-top: 8px; color: #64748b;"><span>Received</span><span>Rs. ${sale.received}</span></div>
                     <div class="total-row" style="color: #64748b;"><span>Change</span><span>Rs. ${sale.change}</span></div>
@@ -1708,7 +1695,7 @@
             }).join('')}
                     <div style="border-top: 2px dashed #000; padding-top: 10px; margin-top: 10px;">
                         <div style="display: flex; justify-content: space-between;"><span>Subtotal:</span><span>Rs. ${subtotal}</span></div>
-                        <div style="display: flex; justify-content: space-between;"><span>Discount (${discountP}%):</span><span>Rs. ${discountAmt}</span></div>
+                        <div style="display: flex; justify-content: space-between;"><span>Discount:</span><span>Rs. ${discountAmt}</span></div>
                         <div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: bold; border-top: 2px solid #000; padding-top: 5px; margin-top: 5px;"><span>TOTAL:</span><span>Rs. ${sale.total}</span></div>
                         <div style="display: flex; justify-content: space-between; margin-top: 5px;"><span>Received:</span><span>Rs. ${sale.received}</span></div>
                         <div style="display: flex; justify-content: space-between;"><span>Change:</span><span>Rs. ${sale.change}</span></div>
